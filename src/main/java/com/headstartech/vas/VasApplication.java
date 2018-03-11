@@ -1,4 +1,4 @@
-package com.headstartech.vas.vas;
+package com.headstartech.vas;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

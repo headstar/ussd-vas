@@ -1,4 +1,4 @@
-package com.headstartech.vas.vas;
+package com.headstartech.vas;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
