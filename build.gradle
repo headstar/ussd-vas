@@ -32,3 +32,7 @@ dependencies {
 	runtime('org.springframework.boot:spring-boot-devtools')
 	testCompile('org.springframework.boot:spring-boot-starter-test')
 }
+
+bootRun {
+	jvmArgs = ["-Dserver.port=9090"]
+}

@@ -30,26 +30,38 @@ import javax.servlet.http.HttpSession;
 public class USSDRequestProcessor {
 
     private static final Logger logger = LoggerFactory.getLogger(DialogController.class);
+    private static String INVOKE_SESSION_ATTRIBUTE_KEY = "ProcessUnstructuredSSRequest_InvokeId";
 
     public XmlMAPDialog process(XmlMAPDialog mapDialogMessage, HttpSession session) throws MAPException {
 
-        logger.debug("Processing dialog message: session= {}, message = {}", session.getId(), mapDialogMessage);
+        String sessionId = session.getId();
+        logger.debug("Received dialog message: sessionId = {}, sessionNew = {}, message = {}", sessionId, session.isNew(), mapDialogMessage);
 
-        if(mapDialogMessage.getMAPMessages().isEmpty()) {
-            throw new RuntimeException("no map message!");
-        }
-        MAPMessage mapMessage = mapDialogMessage.getMAPMessages().getFirst();
-        MessageType tcapMessagetype = mapDialogMessage.getTCAPMessageType();
-        if(MessageType.Begin.equals(tcapMessagetype)) {
-            if(MAPMessageType.processUnstructuredSSRequest_Request.equals(mapMessage.getMessageType())) {
-                ProcessUnstructuredSSRequest processUnstructuredSSRequest = (ProcessUnstructuredSSRequest) mapMessage;
-                process(processUnstructuredSSRequest, mapDialogMessage, session);
-                return mapDialogMessage;
+        MessageType tcapMessageType = mapDialogMessage.getTCAPMessageType();
+        if(MessageType.Begin.equals(tcapMessageType)
+            || MessageType.Continue.equals(tcapMessageType)) {
+
+            if(mapDialogMessage.getMAPMessages().isEmpty()) {
+                throw new RuntimeException("no map message!");
             }
-        } else if (MessageType.Continue.equals(tcapMessagetype)) {
-            UnstructuredSSResponse unstructuredSSResponse = (UnstructuredSSResponseImpl) mapMessage;
-            process(unstructuredSSResponse, mapDialogMessage, session);
+
+            MAPMessage mapMessage = mapDialogMessage.getMAPMessages().getFirst();
+
+            if(MessageType.Begin.equals(tcapMessageType)) {
+                if (MAPMessageType.processUnstructuredSSRequest_Request.equals(mapMessage.getMessageType())) {
+                    ProcessUnstructuredSSRequest processUnstructuredSSRequest = (ProcessUnstructuredSSRequest) mapMessage;
+                    process(processUnstructuredSSRequest, mapDialogMessage, session);
+                }
+            } else {
+                UnstructuredSSResponse unstructuredSSResponse = (UnstructuredSSResponseImpl) mapMessage;
+                process(unstructuredSSResponse, mapDialogMessage, session);
+            }
+            logger.debug("Response dialog message: sessionId = {}, message = {}", sessionId, mapDialogMessage);
             return mapDialogMessage;
+        } else if (MessageType.Abort.equals(tcapMessageType)) {
+            logger.debug("Session aborted: sessionId = {}", sessionId);
+            session.invalidate();
+            return null;
         }
 
         // TODO: handle this scenario!
@@ -57,25 +69,20 @@ public class USSDRequestProcessor {
     }
 
     private void process(ProcessUnstructuredSSRequest processUnstructuredSSRequest, XmlMAPDialog mapDialogMessage, HttpSession session) throws MAPException {
-        logger.debug("Received ProcessUnstructuredSSRequest: message = {}",processUnstructuredSSRequest);
-
         CBSDataCodingScheme cbsDataCodingScheme = processUnstructuredSSRequest.getDataCodingScheme();
-        session.setAttribute("ProcessUnstructuredSSRequest_InvokeId", processUnstructuredSSRequest.getInvokeId());
+        session.setAttribute(INVOKE_SESSION_ATTRIBUTE_KEY, processUnstructuredSSRequest.getInvokeId());
 
         USSDString ussdStr = new USSDStringImpl("USSD String : Hello World\n 1. Balance\n 2. Texts Remaining", cbsDataCodingScheme, null);
-        UnstructuredSSRequest unstructuredSSRequestIndication = new UnstructuredSSRequestImpl(cbsDataCodingScheme, ussdStr, null, null);
+        UnstructuredSSRequest unstructuredSSRequest = new UnstructuredSSRequestImpl(cbsDataCodingScheme, ussdStr, null, null);
 
         mapDialogMessage.reset();
-        mapDialogMessage.setUserObject("Session Id : " + session.getId());
         mapDialogMessage.setCustomInvokeTimeOut(25000);
         mapDialogMessage.setTCAPMessageType(MessageType.Continue);
-        mapDialogMessage.addMAPMessage(unstructuredSSRequestIndication);
+        mapDialogMessage.addMAPMessage(unstructuredSSRequest);
     }
 
     private void process(UnstructuredSSResponse unstructuredSSResponse, XmlMAPDialog mapDialogMessage, HttpSession session) throws MAPException {
-        logger.debug("Received UnstructuredSSResponse: message = {}", unstructuredSSResponse);
-
-        long invokeId = (Long) session.getAttribute("ProcessUnstructuredSSRequest_InvokeId");
+        long invokeId = (Long) session.getAttribute(INVOKE_SESSION_ATTRIBUTE_KEY);
 
         CBSDataCodingScheme cbsDataCodingScheme = unstructuredSSResponse.getDataCodingScheme();
 
@@ -95,5 +102,7 @@ public class USSDRequestProcessor {
         mapDialogMessage.setTCAPMessageType(MessageType.End);
         mapDialogMessage.addMAPMessage(processUnstructuredSSResponse);
         mapDialogMessage.close(false);
+
+        session.invalidate();
     }
 }

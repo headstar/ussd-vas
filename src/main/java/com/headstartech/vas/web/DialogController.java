@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import javax.servlet.ServletInputStream;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
 import java.io.IOException;
 
 /**
@@ -31,12 +32,15 @@ public class DialogController {
     @Autowired
     private USSDRequestProcessor ussdRequestProcessor;
 
-    @PostMapping(value = "/dialog", consumes = MediaType.APPLICATION_XML_VALUE, produces = MediaType.APPLICATION_XML_VALUE)
+    @PostMapping(value = "/dialog", consumes = MediaType.TEXT_XML_VALUE, produces = MediaType.TEXT_XML_VALUE)
     public void dialogRequest(HttpServletRequest request, HttpServletResponse response) throws IOException, MAPException, XMLStreamException {
         ServletInputStream is = request.getInputStream();
         XmlMAPDialog xmlMAPDialogRequest = factory.deserialize(is);
-        XmlMAPDialog xmlMAPDialogResponse = ussdRequestProcessor.process(xmlMAPDialogRequest, request.getSession(true));
-        response.getOutputStream().write(factory.serialize(xmlMAPDialogResponse));
+        HttpSession session = request.getSession(true);
+        XmlMAPDialog xmlMAPDialogResponse = ussdRequestProcessor.process(xmlMAPDialogRequest, session);
+        if(xmlMAPDialogResponse != null) {
+            response.getOutputStream().write(factory.serialize(xmlMAPDialogResponse));
+        }
         response.flushBuffer();
     }
 }
