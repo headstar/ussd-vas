@@ -38,34 +38,33 @@ public class USSDRequestProcessor {
         logger.debug("Received dialog message: sessionId = {}, sessionNew = {}, message = {}", sessionId, session.isNew(), mapDialogMessage);
 
         MessageType tcapMessageType = mapDialogMessage.getTCAPMessageType();
-        if(MessageType.Begin.equals(tcapMessageType)
-            || MessageType.Continue.equals(tcapMessageType)) {
-
-            if(mapDialogMessage.getMAPMessages().isEmpty()) {
-                throw new RuntimeException("no map message!");
-            }
-
-            MAPMessage mapMessage = mapDialogMessage.getMAPMessages().getFirst();
-
-            if(MessageType.Begin.equals(tcapMessageType)) {
-                if (MAPMessageType.processUnstructuredSSRequest_Request.equals(mapMessage.getMessageType())) {
-                    ProcessUnstructuredSSRequest processUnstructuredSSRequest = (ProcessUnstructuredSSRequest) mapMessage;
-                    process(processUnstructuredSSRequest, mapDialogMessage, session);
-                }
+        if(MessageType.Begin.equals(tcapMessageType)) {
+            MAPMessage mapMessage = getMapMessageOrThrow(mapDialogMessage);
+            if (MAPMessageType.processUnstructuredSSRequest_Request.equals(mapMessage.getMessageType())) {
+                ProcessUnstructuredSSRequest processUnstructuredSSRequest = (ProcessUnstructuredSSRequest) mapMessage;
+                process(processUnstructuredSSRequest, mapDialogMessage, session);
+                logger.debug("Response dialog message: sessionId = {}, message = {}", sessionId, mapDialogMessage);
+                return mapDialogMessage;
             } else {
-                UnstructuredSSResponse unstructuredSSResponse = (UnstructuredSSResponseImpl) mapMessage;
-                process(unstructuredSSResponse, mapDialogMessage, session);
+                throw new UnexpectedMessage(String.format("Not expecting MAP message of type %s", mapMessage.getMessageType().name()));
             }
-            logger.debug("Response dialog message: sessionId = {}, message = {}", sessionId, mapDialogMessage);
-            return mapDialogMessage;
+        } else if (MessageType.Continue.equals(tcapMessageType)) {
+            MAPMessage mapMessage = getMapMessageOrThrow(mapDialogMessage);
+            UnstructuredSSResponse unstructuredSSResponse = (UnstructuredSSResponseImpl) mapMessage;
+            process(unstructuredSSResponse, mapDialogMessage, session);
         } else if (MessageType.Abort.equals(tcapMessageType)) {
             logger.debug("Session aborted: sessionId = {}", sessionId);
             session.invalidate();
             return null;
         }
+        throw new UnexpectedMessage(String.format("Not expecting diaolg message with tcap type %s", tcapMessageType.name()));
+    }
 
-        // TODO: handle this scenario!
-        throw new RuntimeException("invalid dialog message!");
+    private MAPMessage getMapMessageOrThrow(XmlMAPDialog xmlMAPDialog) {
+        if(xmlMAPDialog.getMAPMessages().isEmpty()) {
+            throw new UnexpectedMessage("no MAP message in dialog message");
+        }
+        return xmlMAPDialog.getMAPMessages().getFirst();
     }
 
     private void process(ProcessUnstructuredSSRequest processUnstructuredSSRequest, XmlMAPDialog mapDialogMessage, HttpSession session) throws MAPException {
